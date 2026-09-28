@@ -1,0 +1,10 @@
+DealerFlow v5.2.4.8 Choctaw Pilot
+
+Manager PIN hotfix
+- Owner Dashboard ADD / RESET MANAGER now writes one synchronized PIN credential to both staff and manager PIN fields.
+- The server immediately verifies the newly saved PIN before reporting success.
+- Manager login first checks the dedicated manager credential.
+- Backward compatibility: if an older manager record has a mismatched manager credential but the entered PIN matches the staff PIN, login succeeds and the manager credential is automatically repaired.
+- Includes the safe dealer_number / must_change_pin compatibility migration discovered during v5.2.4.7 testing.
+
+All v5.2.4.7 features are preserved.

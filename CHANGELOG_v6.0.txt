@@ -1,0 +1,35 @@
+DealerFlow 6.0 — Choctaw Pilot
+
+Major operations release built from v5.2.4.8.
+
+Included
+- Spreadsheet-style schedule grid: one dealer per row, dates across columns.
+- Schedule time chips forced to one line.
+- Owner account create/reset/activate/deactivate controls retained.
+- Manager PIN reset/login hardening retained.
+- AI schedule photo/screenshot import with review-before-import retained.
+- CSV roster/schedule import retained, including 3-digit dealer numbers, temporary leading-zero PINs, blank End times, and no required Shift column.
+- Simplified Down Tracker: event/date/dealer/shift auto-filled, Table + Start as primary inputs, End defaults to +30 minutes but remains editable.
+- Optional room lists for tables, breaks, brushes, and setup labels.
+- Optional geofenced dealer clock-in with manager-configurable radius.
+- Managers can clock dealers in/out and backdate entries.
+- Notification center plus optional Web Push support for:
+  * shift swap posted
+  * dealer released on EO
+  * swap accepted
+  * accepted swap awaiting manager approval
+  * 15-minute shift reminder while DealerFlow is active/polling
+  * hours worked after clock-out
+- Choctaw EO order retained: scheduled start, prior completed hours, EO signup time.
+- Dealer privacy retained: dealers do not receive management-wide time/attendance/report data.
+- v6.0 schema guard and MIGRATION_v6.0.sql included.
+
+Optional Vercel variables
+- OPENAI_API_KEY — AI schedule photo import
+- OPENAI_SCHEDULE_MODEL — optional model override
+- VAPID_PUBLIC_KEY — background browser push
+- VAPID_PRIVATE_KEY — background browser push
+- VAPID_SUBJECT — e.g. mailto:admin@example.com
+
+Generate VAPID keys after npm install with:
+  npm run generate-vapid

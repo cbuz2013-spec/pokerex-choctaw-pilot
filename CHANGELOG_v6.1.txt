@@ -1,0 +1,13 @@
+DealerFlow 6.1 — Poker Executives
+
+Based on the exact complete 6.0 application. Added manager/owner down-card upload,
+row review, atomic import, duplicate protection, combined down report, CSV export
+and source-card audit. Reuses rooms, room_members and down_entries.
+
+Existing manual entry now shares duplicate checks with card imports.
+Dealers can flag imported downs but cannot delete manager-imported records.
+Existing stored room names, event names and operational EO settings are unchanged.
+
+10 unit/integration tests passed, plus desktop/mobile browser checks and core 6.0
+workflow smoke tests. External AI was mocked for deterministic tests. Live photo
+recognition and production deployment still need configured server credentials.

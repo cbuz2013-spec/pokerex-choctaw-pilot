@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "api/app.js": {
+      "maxDuration": 120
+    },
+    "api/notifications-cron.js": {
+      "maxDuration": 120
+    }
+  }
+}

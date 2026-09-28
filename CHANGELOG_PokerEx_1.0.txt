@@ -1,0 +1,10 @@
+PokerEx 1.0 — Poker Executives / Choctaw Pilot
+
+Built on complete DealerFlow 6.1, preserving existing workflows and down-card reports.
+Restores original Poker Executives logo with red/black styling and PokerEx 1.0 identity.
+Adds manager/owner broadcasts and targeted messages with sent history and idempotency.
+Adds durable push delivery/retries, device status, expiration cleanup and per-device controls.
+Adds validated VAPID setup, private setup-file helper, protected reminder scheduler,
+room time zones, web manifest, and Choctaw pilot checklist.
+
+Next planned brand release: DealerFlo6.2 (not included).

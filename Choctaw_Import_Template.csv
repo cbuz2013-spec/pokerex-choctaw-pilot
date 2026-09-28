@@ -1,0 +1,6 @@
+Dealer,Dealer Number,PIN,Date,Start,End,Shift
+Jane Dealer,123,,2026-10-01,09:00,17:00,Day
+John Dealer,087,2580,2026-10-01,11:00,19:00,Day
+Sam Dealer,431,,,,
+Jane Dealer,123,,2026-10-02,09:00,17:00,Day
+John Dealer,087,2580,2026-10-02,11:00,19:00,Day

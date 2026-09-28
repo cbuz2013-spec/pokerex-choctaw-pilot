@@ -1,0 +1,22 @@
+DealerFlow v5.2.4.7 — Choctaw Pilot
+
+Added
+- Owner management from the Owner Dashboard: add owners, reset PINs, disable/reactivate.
+- Final-active-owner protection.
+- AI Schedule Import from photo/screenshot with editable review table before import.
+- AI confidence highlighting and no-write-until-confirmed workflow.
+- Spreadsheet-style schedule: one dealer row, one date column, start time in each cell.
+- Sticky dealer column and mobile horizontal scrolling.
+
+Fixed / preserved
+- Time badges no longer wrap across lines.
+- CSV import still supports Date, Dealer, Dealer Number, Start, End with no Shift column.
+- Blank End times remain valid.
+- Manual shift End time can be blank.
+- Choctaw EO ordering remains scheduled start -> prior completed hours -> EO signup time.
+- Dealer privacy and owner-as-management behavior preserved.
+
+Deployment note
+- AI Schedule Import requires OPENAI_API_KEY in Vercel environment variables.
+- Optional OPENAI_SCHEDULE_MODEL defaults to gpt-5.6-luna.
+- Owner table is auto-created by the API. A safe manual migration is included as MIGRATION_v5.2.4.7_NEXT_UPDATE.sql.
