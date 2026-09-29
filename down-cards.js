@@ -60,7 +60,7 @@ $('dcRead').onclick=async()=>{
 $('dcImport').onclick=async()=>{
  const cards=dc.cards.map(c=>({uploadId:c.uploadId,rows:c.rows.filter(r=>r.approved)})).filter(c=>c.rows.length);
  const count=cards.reduce((s,c)=>s+c.rows.length,0),unapproved=dc.cards.flatMap(c=>c.rows).length-count;
- if(!count||!confirm(`Import ${count} approved downs? ${unapproved} unapproved rows will not be imported. Matching downs will be skipped.`))return;
+ if(!count||!await pxConfirm(`Import ${count} approved downs? ${unapproved} unapproved rows will not be imported. Matching downs will be skipped.`))return;
  dcBusy(true);const generation=dc.generation;
  try{const result=await dcApi('importDownCards',{cards});if(generation!==dc.generation)return;
   // A card is finalized once imported; unapproved rows are deliberately excluded.

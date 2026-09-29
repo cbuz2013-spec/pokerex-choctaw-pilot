@@ -1,3 +1,60 @@
+// Owner actions use page dialogs because embedded browsers may not support prompt().
+function pxOwnerStatus(message){
+ let status=$('pxOwnerStatus');
+ if(!status){status=document.createElement('p');status.id='pxOwnerStatus';status.className='notice';status.setAttribute('role','status');$('orgRooms').before(status);}
+ status.textContent=message;
+}
+function pxOwnerRequest(action,extra){
+ const orgCode=JSON.parse(localStorage.getItem('df52owner')||'{}').orgCode;
+ return call({action,orgCode,token:ownerToken,...extra});
+}
+function pxOwnerAction({title,message,fields=[],submitLabel='Save',danger=false,submit}){
+ if($('pxOwnerDialog'))return Promise.resolve(null);
+ return new Promise(resolve=>{
+  const trigger=document.activeElement,dialog=document.createElement('dialog'),form=document.createElement('form');
+  dialog.id='pxOwnerDialog';dialog.className='px-owner-dialog';dialog.setAttribute('aria-labelledby','pxOwnerDialogTitle');dialog.setAttribute('aria-describedby','pxOwnerDialogMessage');
+  const heading=document.createElement('h2');heading.id='pxOwnerDialogTitle';heading.textContent=title;
+  const description=document.createElement('p');description.id='pxOwnerDialogMessage';description.textContent=message;
+  form.append(heading,description);
+  const inputs={};
+  for(const field of fields){
+   const label=document.createElement('label'),input=document.createElement('input');
+   input.id='pxOwnerField-'+field.name;input.name=field.name;input.type=field.type||'text';input.required=true;input.autocomplete=field.type==='password'?'new-password':'off';input.value=field.value||'';
+   if(field.numeric)input.inputMode='numeric';if(field.maxLength)input.maxLength=field.maxLength;
+   if(field.pattern)input.pattern=field.pattern;
+   label.htmlFor=input.id;label.textContent=field.label;inputs[field.name]=input;form.append(label,input);
+  }
+  const error=document.createElement('p');error.className='px-owner-error';error.setAttribute('role','alert');
+  const actions=document.createElement('div');actions.className='px-owner-actions';
+  const cancel=document.createElement('button');cancel.type='button';cancel.className='btn ghost';cancel.textContent='Cancel';
+  const save=document.createElement('button');save.type='submit';save.className='btn '+(danger?'danger':'primary');save.textContent=submitLabel;
+  actions.append(cancel,save);form.append(error,actions);dialog.append(form);document.body.append(dialog);
+  let busy=false,result=null;
+  cancel.onclick=()=>dialog.close();
+  dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault();});
+  dialog.addEventListener('close',()=>{dialog.remove();if(trigger?.isConnected)trigger.focus();resolve(result);},{once:true});
+  form.onsubmit=async event=>{
+   event.preventDefault();if(busy)return;
+   const values=Object.fromEntries(fields.map(field=>[field.name,inputs[field.name].value.trim()]));
+   for(const field of fields){
+    let warning='';
+    if(!values[field.name])warning='Enter '+field.label.toLowerCase()+'.';
+    else if(field.equals!==undefined&&values[field.name]!==field.equals)warning='Enter the exact room code '+field.equals+' to confirm deletion.';
+    else if(field.matches&&values[field.name]!==values[field.matches])warning='PINs do not match.';
+    if(warning){error.textContent=warning;inputs[field.name].focus();return;}
+   }
+   busy=true;error.textContent='';save.textContent='Saving…';for(const control of form.elements)control.disabled=true;
+   try{result=await submit(values);dialog.close();}
+   catch(e){error.textContent=e.message||'Could not save. Please try again.';}
+   finally{busy=false;save.textContent=submitLabel;for(const control of form.elements)control.disabled=false;}
+  };
+  dialog.showModal();(fields.length?inputs[fields[0].name]:cancel).focus();
+ });
+}
+const pxPinFields=label=>[
+ {name:'pin',label,type:'password',numeric:true,pattern:'[0-9]{4,12}',maxLength:12},
+ {name:'confirmPin',label:'Confirm PIN',type:'password',numeric:true,pattern:'[0-9]{4,12}',maxLength:12,matches:'pin'}
+];
 const px={scope:'',device:'',sending:false,requestId:null,requestData:null};
 const pxEsc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pxCall=(action,extra={})=>call({action,room:session.room,token:session.token,...extra});
@@ -63,7 +120,7 @@ $('pxSend').onclick=async()=>{
  const payload={subject,message,audience,recipients:audience==='all'?[]:recipients};const fingerprint=JSON.stringify(payload);
  if(px.requestData!==fingerprint){px.requestId=crypto.randomUUID();px.requestData=fingerprint;}
  const count=audience==='all'?(roomState.roster||[]).filter(m=>m.active!==false).length:recipients.length;
- if(!confirm(`Send “${subject}” to ${count} ${audience==='all'?'active':'selected'} dealers?`))return;
+ if(!await pxConfirm(`Send “${subject}” to ${count} ${audience==='all'?'active':'selected'} dealers?`))return;
  const scope=px.scope;px.sending=true;$('pxSend').disabled=true;$('pxSendResult').textContent='Sending…';
  try{const r=await pxCall('sendManagerMessage',{...payload,requestId:px.requestId});if(scope!==px.scope)return;
  $('pxSendResult').textContent=`${r.replayed?'Previously sent message confirmed':'Message sent'} to ${r.count} ${r.count===1?'dealer':'dealers'}. Saved in their in-app notifications; enabled devices receive push.`;

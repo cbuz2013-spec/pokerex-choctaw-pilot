@@ -1,0 +1,9 @@
+node_modules
+tests
+*.zip
+.secrets
+scripts
+*.sql
+*.md
+*.txt
+deployment

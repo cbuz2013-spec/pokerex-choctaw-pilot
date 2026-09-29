@@ -35,7 +35,7 @@ const server=http.createServer(async(req,res)=>{
   req.query=Object.fromEntries(url.searchParams);if(url.pathname==='/api/notifications-cron')req.query.action='notificationWorker';req.body=raw?JSON.parse(raw):{};
   queue=queue.then(()=>handler(req,res));await queue;return;
  }
- const allowed={'/':'index.html','/index.html':'index.html','/down-cards.js':'down-cards.js','/down-cards.css':'down-cards.css','/sw.js':'sw.js','/pokerex.js':'pokerex.js','/pokerex.css':'pokerex.css','/poker-executives-logo.png':'poker-executives-logo.png','/pokerex-icon.svg':'pokerex-icon.svg','/manifest.webmanifest':'manifest.webmanifest'};
+ const allowed={'/':'index.html','/index.html':'index.html','/down-cards.js':'down-cards.js','/down-cards.css':'down-cards.css','/sw.js':'sw.js','/drafts.js':'drafts.js','/chat.js':'chat.js','/chat.css':'chat.css','/pokerex.js':'pokerex.js','/pokerex.css':'pokerex.css','/poker-executives-logo.png':'poker-executives-logo.png','/pokerex-icon.svg':'pokerex-icon.svg','/manifest.webmanifest':'manifest.webmanifest'};
  if(!allowed[url.pathname]){res.statusCode=404;res.end();return;}
  const file=allowed[url.pathname];res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.png')?'image/png':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.webmanifest')?'application/manifest+json':'text/html');res.end(await fs.readFile(path.join(root,file)));
 });server.listen(4178,'127.0.0.1',()=>console.log('Verification server http://127.0.0.1:4178 (ephemeral test data, mocked AI only)'));
