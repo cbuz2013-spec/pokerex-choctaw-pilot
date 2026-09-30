@@ -1,10 +1,10 @@
 /* Down-card UI shares the authenticated session and roster from PokerEx 6.0. */
-const dc = {cards:[],report:null,room:null,busy:false,generation:0};
+const dc = {cards:[],report:null,room:null,busy:false,generation:0,retryFiles:[]};
 const dcEsc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dcKey=v=>String(v??'').trim().replace(/\s+/g,' ').toLowerCase();
 const dcApi=(action,extra={})=>call({action,room:session.room,token:session.token,...extra});
 function dcSessionChanged(manager) {
- if(dc.room!==session.room||(!manager&&dc.cards.length)){dc.room=session.room;dc.generation++;dc.cards=[];dc.report=null;dcRenderCards();$('dcEvent').innerHTML='<option value="">Current event</option>';$('dcMessage').textContent='';$('dcReportStatus').textContent='Choose an event to view its downs.';$('dcReportTable').innerHTML='';$('dcAudit').innerHTML='';$('dcExport').disabled=true;}
+ if(dc.room!==session.room||(!manager&&dc.cards.length)){dc.room=session.room;dc.generation++;dc.cards=[];dc.retryFiles=[];dc.report=null;dcRenderCards();$('dcEvent').innerHTML='<option value="">Current event</option>';$('dcMessage').textContent='';$('dcReportStatus').textContent='Choose an event to view its downs.';$('dcReportTable').innerHTML='';$('dcAudit').innerHTML='';$('dcExport').disabled=true;}
  for(const key of ['downcards','downreport'])document.querySelector(`[data-tab="${key}"]`).classList.toggle('hidden',!manager);
  if(!manager&&['downcards','downreport'].includes(document.querySelector('.tabs button.active')?.dataset.tab))document.querySelector('[data-tab="eo"]').click();
 }
@@ -39,9 +39,9 @@ function dcRenderCards() {
 }
 function dcBusy(value) {dc.busy=value;$('dcRead').disabled=value;$('dcFiles').disabled=value;document.querySelectorAll('#dcCards input,#dcCards button').forEach(el=>el.disabled=value);if(!value)dcRenderCards();dcUpdateSummary();}
 $('dcRead').onclick=async()=>{
- const files=[...$('dcFiles').files];if(!files.length){$('dcMessage').textContent='Choose one or more table-card photos first.';return;}
+ const files=dc.retryFiles.length?dc.retryFiles:[...$('dcFiles').files];if(!files.length){$('dcMessage').textContent='Choose one or more table-card photos first.';return;}
  if(files.length+dc.cards.length>20){$('dcMessage').textContent='Review up to 20 cards per batch.';return;}
- const generation=dc.generation;dcBusy(true);let failed=[];
+ const generation=dc.generation;dcBusy(true);let failed=[],retryFiles=[];
  try {for(let i=0;i<files.length;i++){
   if(generation!==dc.generation)return;
   const f=files[i];$('dcMessage').textContent=`Reading card ${i+1} of ${files.length}: ${f.name}…`;
@@ -52,9 +52,9 @@ $('dcRead').onclick=async()=>{
    const result=await dcApi('analyzeDownCard',{filename:f.name,imageData:image});
    if(generation!==dc.generation)return;
    dc.cards.push({uploadId:result.uploadId,filename:f.name,image,rows:result.rows.map(r=>({...r,approved:false}))});
-  }catch(e){failed.push(`${f.name}: ${e.message}`);}
+  }catch(e){failed.push(`${f.name}: ${e.message}`);retryFiles.push(f);}
  }
- $('dcFiles').value='';$('dcMessage').textContent=failed.length?`Some cards need another attempt. ${failed.join(' | ')}`:'Photos read. Review and approve each row, then import the batch.';
+ dc.retryFiles=retryFiles;$('dcFiles').value='';$('dcMessage').textContent=failed.length?`Some cards need another attempt. ${failed.join(' | ')} Select READ SELECTED PHOTOS to retry the failed cards.`:'Photos read. Review and approve each row, then import the batch.';
  }finally{dcBusy(false);}
 };
 $('dcImport').onclick=async()=>{
@@ -87,3 +87,5 @@ $('dcRefresh').onclick=dcLoadReport;$('dcEvent').onchange=dcLoadReport;
 $('dcExport').onclick=()=>{if(!dc.report)return;const url=URL.createObjectURL(new Blob([dc.report.csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='PokerEx-Down-Report-'+dc.report.event.replace(/[^a-z0-9_-]/gi,'-')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 document.querySelector('[data-tab="downreport"]').addEventListener('click',dcLoadReport);
 if(session&&roomState)dcSessionChanged(['manager','owner'].includes(session.role));
+
+$('dcFiles').addEventListener('change',()=>{dc.retryFiles=[];});

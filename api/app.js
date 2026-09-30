@@ -2,6 +2,7 @@ import {chatMigration,handleChat} from '../lib/chat.js';
 import {operationsMigration,handleOperations,dateOnly,roomDay,roomDayBounds} from '../lib/operations.js';
 import { notificationMigration, createNotifications, cronAuthorized } from '../lib/notifications.js';
 import { migration, handleDownCards, insertDown, timeKey, validDate } from '../lib/down-cards.js';
+import {photoServiceError} from '../lib/ai-errors.js';
 import crypto from 'crypto';
 import pg from 'pg';
 import webpush from 'web-push';
@@ -78,7 +79,10 @@ async function ownersForOrg(orgId){
   return rows.map(x=>({...x,createdAt:ms(x.createdAt),updatedAt:ms(x.updatedAt)}));
 }
 
+const demoEnabled=()=>process.env.POKEREX_ENABLE_DEMO==='true'&&process.env.VERCEL_ENV!=='production'&&process.env.NODE_ENV!=='production';
+const unsafeOwner=o=>!demoEnabled()&&o&&verifyPin('5555',o.owner_pin_salt||o.pin_salt,o.owner_pin_hash||o.pin_hash);
 async function ensureDemo(){
+  if(!demoEnabled())throw Object.assign(new Error('Demo provisioning is disabled.'),{status:403});
   let {rows:[org]}=await q('SELECT * FROM organizations WHERE code=$1',['DEMO']);
   if(!org){const hp=hashPin('5555');({rows:[org]}=await q(`INSERT INTO organizations(code,name,plan,owner_name,owner_pin_hash,owner_pin_salt) VALUES($1,$2,'trial','Owner',$3,$4) RETURNING *`,['DEMO','Poker Executives Demo Organization',hp.hash,hp.salt]));}
   let {rows:[room]}=await q('SELECT *,event_start_date::text AS event_start_date,event_end_date::text AS event_end_date FROM rooms WHERE code=$1',['4271']);
@@ -110,8 +114,8 @@ async function saveManager(db,roomId,name,pin){
   }
   return {id:saved.id,created:saved.created};
 }
-async function roomSession(roomId,t){if(!t)return null;const h=tokenHash(t);const {rows:[m]}=await q(`SELECT s.*,m.name,m.is_manager,m.active FROM sessions s JOIN room_members m ON m.id=s.member_id WHERE s.room_id=$1 AND s.token_hash=$2 AND s.expires_at>now() AND m.active=true`,[roomId,h]);if(m&&m.role==='manager'&&!m.is_manager)return null;if(m)return {...m,manager:m.role==='manager'&&!!m.is_manager};const {rows:[o]}=await q(`SELECT s.*,o.name FROM sessions s JOIN organization_owners o ON o.id=s.owner_id AND o.organization_id=s.organization_id AND o.active=true JOIN rooms r ON r.organization_id=s.organization_id WHERE r.id=$1 AND s.role='owner' AND s.token_hash=$2 AND s.expires_at>now()`,[roomId,h]);return o?{...o,manager:true,owner:true}:null}
-async function ownerSession(orgId,t){if(!t)return null;const {rows:[s]}=await q(`SELECT s.* FROM sessions s JOIN organization_owners o ON o.id=s.owner_id AND o.organization_id=s.organization_id AND o.active=true WHERE s.organization_id=$1 AND s.role='owner' AND s.token_hash=$2 AND s.expires_at>now()`,[orgId,tokenHash(t)]);return s}
+async function roomSession(roomId,t){if(!t)return null;const h=tokenHash(t);const {rows:[m]}=await q(`SELECT s.*,m.name,m.is_manager,m.active FROM sessions s JOIN room_members m ON m.id=s.member_id WHERE s.room_id=$1 AND s.token_hash=$2 AND s.expires_at>now() AND m.active=true`,[roomId,h]);if(m&&m.role==='manager'&&!m.is_manager)return null;if(m)return {...m,manager:m.role==='manager'&&!!m.is_manager};const {rows:[o]}=await q(`SELECT s.*,o.name,o.pin_hash AS owner_pin_hash,o.pin_salt AS owner_pin_salt FROM sessions s JOIN organization_owners o ON o.id=s.owner_id AND o.organization_id=s.organization_id AND o.active=true JOIN rooms r ON r.organization_id=s.organization_id WHERE r.id=$1 AND s.role='owner' AND s.token_hash=$2 AND s.expires_at>now()`,[roomId,h]);return o&&!unsafeOwner(o)?{...o,manager:true,owner:true}:null}
+async function ownerSession(orgId,t){if(!t)return null;const {rows:[s]}=await q(`SELECT s.*,o.pin_hash AS owner_pin_hash,o.pin_salt AS owner_pin_salt FROM sessions s JOIN organization_owners o ON o.id=s.owner_id AND o.organization_id=s.organization_id AND o.active=true WHERE s.organization_id=$1 AND s.role='owner' AND s.token_hash=$2 AND s.expires_at>now()`,[orgId,tokenHash(t)]);return unsafeOwner(s)?null:s}
 async function log(roomId,text,actor='System'){await q(`INSERT INTO audit_logs(id,room_id,actor,event_text) VALUES($1,$2,$3,$4)`,[id('log'),roomId,actor,text])}
 function requireManager(ss,res){if(!ss?.manager||!['manager','owner'].includes(ss.role)){res.status(403).json({error:'Manager required'});return false}return true}
 function roomResources(room){let r=room.resource_config||{};if(typeof r==='string'){try{r=JSON.parse(r)}catch{r={}}}return {tables:Array.isArray(r.tables)?r.tables:[],breaks:Array.isArray(r.breaks)&&r.breaks.length?r.breaks:['Break'],brushes:Array.isArray(r.brushes)&&r.brushes.length?r.brushes:['Brush'],setup:Array.isArray(r.setup)&&r.setup.length?r.setup:['Setup']}}
@@ -134,7 +138,7 @@ async function roomPublic(room,viewer='',viewerRole='guest'){
     q(`SELECT id,name,clock_in AS "clockIn",clock_out AS "clockOut" FROM time_entries WHERE room_id=$1 ORDER BY clock_in`,[room.id]),
     q(`SELECT shift_id AS "shiftId",name,status,at,marked_by AS by FROM attendance WHERE room_id=$1 ORDER BY at`,[room.id]),
     q(`SELECT id,event_text AS text,actor,created_at AS at FROM audit_logs WHERE room_id=$1 ORDER BY created_at DESC LIMIT 100`,[room.id]),
-    viewer?q(`SELECT id,card_upload_id AS "uploadId",series_name AS "seriesName",work_date::text AS date,shift_start AS "shiftStart",table_label AS "table",entry_kind AS kind,down_start AS start,down_end AS "end",correction_needed AS correction,created_at AS "createdAt" FROM down_entries WHERE room_id=$1 AND lower(dealer_name)=lower($2) ORDER BY work_date,down_start`,[room.id,viewer]):Promise.resolve({rows:[]}),
+    viewer?q(`SELECT id,card_upload_id AS "uploadId",series_name AS "seriesName",work_date::text AS date,shift_start AS "shiftStart",table_label AS "table",entry_kind AS kind,down_start AS start,down_end AS "end",ends_next_day AS "endNextDay",correction_needed AS correction,created_at AS "createdAt" FROM down_entries WHERE room_id=$1 AND lower(dealer_name)=lower($2) ORDER BY work_date,down_start`,[room.id,viewer]):Promise.resolve({rows:[]}),
     q(`SELECT lower(dealer_name) AS k,COUNT(*) FILTER(WHERE entry_kind='table' AND work_date=(now() AT TIME ZONE $2)::date)::int AS downs FROM down_entries WHERE room_id=$1 GROUP BY lower(dealer_name)`,[room.id,room.timezone||'America/Chicago']),
     q(`SELECT lower(name) AS k,COALESCE(SUM(EXTRACT(EPOCH FROM (clock_out-clock_in))/3600.0),0)::float8 AS hours
        FROM time_entries
@@ -176,9 +180,10 @@ export default async function handler(req,res){
       const code=clean(req.query.room,20)||'4271';const room=await getRoomByCode(code);if(!room)return res.status(404).json({error:'Room not found'});return res.json({room:await roomPublic(room)});
     }
     if(action==='ownerLogin'){
-      const orgCode=clean(b.orgCode,20).toUpperCase(),pin=digits(b.pin);let {rows:[org]}=await q('SELECT * FROM organizations WHERE code=$1',[orgCode]);if(!org&&orgCode==='DEMO'){await ensureDemo();({rows:[org]}=await q('SELECT * FROM organizations WHERE code=$1',[orgCode]));}
+      const orgCode=clean(b.orgCode,20).toUpperCase(),pin=digits(b.pin);let {rows:[org]}=await q('SELECT * FROM organizations WHERE code=$1',[orgCode]);if(!org&&orgCode==='DEMO'&&demoEnabled()){await ensureDemo();({rows:[org]}=await q('SELECT * FROM organizations WHERE code=$1',[orgCode]));}
       if(!org)return res.status(401).json({error:'Invalid owner login'});
       const {rows:allOwnerRows}=await q(`SELECT * FROM organization_owners WHERE organization_id=$1`,[org.id]);
+      if(!demoEnabled()&&pin==='5555')return res.status(403).json({error:'The published demo owner PIN is disabled. An administrator must configure a private owner PIN.'});
       let matchedOwner=allOwnerRows.find(o=>o.active&&verifyPin(pin,o.pin_salt,o.pin_hash));
       const legacyGood=!allOwnerRows.length&&verifyPin(pin,org.owner_pin_salt,org.owner_pin_hash);
       if(!legacyGood&&!matchedOwner)return res.status(401).json({error:'Invalid owner login'});
@@ -192,6 +197,7 @@ export default async function handler(req,res){
       const orgCode=clean(b.orgCode,20).toUpperCase();
       const {rows:[org]}=await q('SELECT * FROM organizations WHERE code=$1',[orgCode]);
       if(!org||!await ownerSession(org.id,b.token))return res.status(401).json({error:'Owner session expired'});
+      if(['createOwner','resetOwnerPin'].includes(action)&&!demoEnabled()&&digits(b.pin)==='5555')return res.status(400).json({error:'Choose a private owner PIN; the published demo PIN is disabled.'});
       if(action==='createOwner'){
         const name=clean(b.name,80),pin=digits(b.pin);
         if(!name||pin.length<4)return res.status(400).json({error:'Owner name and 4+ digit PIN required'});
@@ -203,8 +209,14 @@ export default async function handler(req,res){
         const {rowCount}=await q(`UPDATE organization_owners SET pin_hash=$1,pin_salt=$2,updated_at=now() WHERE id=$3 AND organization_id=$4`,[hp.hash,hp.salt,ownerId,org.id]);if(!rowCount)return res.status(404).json({error:'Owner not found'});await q('DELETE FROM sessions WHERE owner_id=$1',[ownerId]);
       }else{
         const ownerId=Number(b.ownerId),active=!!b.active;if(!ownerId)return res.status(400).json({error:'Owner required'});
-        if(!active){const {rows:[c]}=await q(`SELECT COUNT(*)::int AS n FROM organization_owners WHERE organization_id=$1 AND active=true`,[org.id]);const {rows:[target]}=await q(`SELECT active FROM organization_owners WHERE id=$1 AND organization_id=$2`,[ownerId,org.id]);if(target?.active&&c.n<=1)return res.status(400).json({error:'At least one active owner must remain'})}
-        const {rowCount}=await q(`UPDATE organization_owners SET active=$1,updated_at=now() WHERE id=$2 AND organization_id=$3`,[active,ownerId,org.id]);if(!rowCount)return res.status(404).json({error:'Owner not found'});if(!active)await q('DELETE FROM sessions WHERE owner_id=$1',[ownerId]);
+        await tx(async db=>{
+          await db.query('SELECT id FROM organizations WHERE id=$1 FOR UPDATE',[org.id]);
+          const {rows:[target]}=await db.query('SELECT active FROM organization_owners WHERE id=$1 AND organization_id=$2',[ownerId,org.id]);
+          if(!target)throw Object.assign(new Error('Owner not found'),{status:404});
+          if(!active&&target.active){const {rows:[c]}=await db.query('SELECT COUNT(*)::int AS n FROM organization_owners WHERE organization_id=$1 AND active=true',[org.id]);if(c.n<=1)throw Object.assign(new Error('At least one active owner must remain'),{status:400});}
+          await db.query('UPDATE organization_owners SET active=$1,updated_at=now() WHERE id=$2 AND organization_id=$3',[active,ownerId,org.id]);
+          if(!active)await db.query('DELETE FROM sessions WHERE owner_id=$1',[ownerId]);
+        });
       }
       const {rows}=await q('SELECT *,event_start_date::text AS event_start_date,event_end_date::text AS event_end_date FROM rooms WHERE organization_id=$1 ORDER BY archived_at NULLS FIRST,created_at',[org.id]);return res.json({ok:true,org:orgPublic(org,rows),owners:await ownersForOrg(org.id)});
     }
@@ -290,8 +302,8 @@ export default async function handler(req,res){
       const imageData=String(b.imageData||'');
       if(!/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(imageData))return res.status(400).json({error:'Please upload a PNG, JPG, or WebP schedule image'});
       const prompt=`Read this poker dealer work schedule. Extract every visible scheduled assignment. Return dates as YYYY-MM-DD when determinable, start/end times as 24-hour HH:MM, and dealer numbers as exactly the visible digits (usually 3 digits). If a field is unreadable, use an empty string and set confidence to low. Do not invent values. End time may be blank. Notes should briefly explain uncertainty. Current event context: ${room.event_name||room.room_name||'PokerEx event'} ${room.event_start_date?`from ${String(room.event_start_date).slice(0,10)}`:''} ${room.event_end_date?`to ${String(room.event_end_date).slice(0,10)}`:''}.`;
-      const rr=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{'Authorization':`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model:process.env.OPENAI_SCHEDULE_MODEL||'gpt-5.6-luna',input:[{role:'user',content:[{type:'input_text',text:prompt},{type:'input_image',image_url:imageData,detail:'high'}]}],text:{format:{type:'json_schema',name:'dealerflow_schedule',strict:true,schema:{type:'object',additionalProperties:false,properties:{rows:{type:'array',items:{type:'object',additionalProperties:false,properties:{dealer:{type:'string'},dealerNumber:{type:'string'},date:{type:'string'},start:{type:'string'},end:{type:'string'},confidence:{type:'string',enum:['high','medium','low']},notes:{type:'string'}},required:['dealer','dealerNumber','date','start','end','confidence','notes']}}},required:['rows']}}}})});
-      const data=await rr.json();if(!rr.ok)return res.status(502).json({error:data?.error?.message||'AI schedule read failed'});
+      const rr=await fetch('https://api.openai.com/v1/responses',{method:'POST',signal:AbortSignal.timeout(90000),headers:{'Authorization':`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model:process.env.OPENAI_SCHEDULE_MODEL||'gpt-4.1-mini',input:[{role:'user',content:[{type:'input_text',text:prompt},{type:'input_image',image_url:imageData,detail:'high'}]}],text:{format:{type:'json_schema',name:'dealerflow_schedule',strict:true,schema:{type:'object',additionalProperties:false,properties:{rows:{type:'array',items:{type:'object',additionalProperties:false,properties:{dealer:{type:'string'},dealerNumber:{type:'string'},date:{type:'string'},start:{type:'string'},end:{type:'string'},confidence:{type:'string',enum:['high','medium','low']},notes:{type:'string'}},required:['dealer','dealerNumber','date','start','end','confidence','notes']}}},required:['rows']}}}})});
+      const data=await rr.json();if(!rr.ok)throw photoServiceError(rr.status,data);
       const txt=data.output_text||data.output?.flatMap(x=>x.content||[]).find(x=>x.type==='output_text')?.text||'';
       let parsed;try{parsed=JSON.parse(txt)}catch{return res.status(502).json({error:'AI returned an unreadable schedule response'})}
       const rosterNames=new Set((await q(`SELECT lower(name) AS n FROM room_members WHERE room_id=$1`,[room.id])).rows.map(x=>x.n));
@@ -356,13 +368,16 @@ export default async function handler(req,res){
       if(ss.role!=='dealer')return res.status(403).json({error:'Down tracking is dealer-only'});
       const workDate=/^\d{4}-\d{2}-\d{2}$/.test(clean(b.date,10))?clean(b.date,10):roomDay(room),table=clean(b.table,30),start=clean(b.start,5),requestedEnd=clean(b.end,5);
       if(!/^\d{1,2}:(00|30)$/.test(start)||!table)return res.status(400).json({error:'Table and :00/:30 down start are required'});
+      if(requestedEnd&&!timeKey(requestedEnd))return res.status(400).json({error:'Enter a valid down end time.'});
       const series=clean(b.seriesName,100)||clean(room.event_name,100)||clean(room.room_name,100)||'PokerEx Event';
       const {rows:[todayShift]}=await q(`SELECT start_time FROM shifts WHERE room_id=$1 AND lower(dealer_name)=lower($2) AND shift_date=$3 AND status<>'cancelled' ORDER BY start_time LIMIT 1`,[room.id,actor,workDate]);
       const shiftStart=clean(b.shiftStart,5)||todayShift?.start_time||start;
       const [hh,mm]=start.split(':').map(Number),mins=hh*60+mm+30,defaultEnd=`${String(Math.floor((mins%1440)/60)).padStart(2,'0')}:${String(mins%60).padStart(2,'0')}`,end=/^\d{1,2}:\d{2}$/.test(requestedEnd)?requestedEnd:defaultEnd;
       const low=table.toLowerCase(),kind=low.includes('break')?'break':low.includes('setup')?'setup':low.includes('brush')?'brush':'table';
       if(!validDate(workDate)||!timeKey(start)||!timeKey(end))return res.status(400).json({error:'Valid down date and times required'});
-      const added=await tx(async db=>{const {rows:[m]}=await db.query('SELECT id,name,dealer_number FROM room_members WHERE room_id=$1 AND id=$2',[room.id,ss.member_id]);return insertDown(db,room.id,{event:series,date:workDate,table,time:timeKey(start)},m,null,{kind,shiftStart,end:timeKey(end)})});
+      const endNextDay=b.endNextDay===true;
+      if((!endNextDay&&timeKey(end)<=timeKey(start))||(endNextDay&&timeKey(end)>=timeKey(start)))return res.status(400).json({error:'End must follow start. For an overnight down, select End is next day and an earlier end time.'});
+      const added=await tx(async db=>{const {rows:[m]}=await db.query('SELECT id,name,dealer_number FROM room_members WHERE room_id=$1 AND id=$2',[room.id,ss.member_id]);return insertDown(db,room.id,{event:series,date:workDate,table,time:timeKey(start)},m,null,{kind,shiftStart,end:timeKey(end),endNextDay})});
       if(!added)return res.status(409).json({error:'This down is already recorded.'});
     } else if(action==='toggleDownCorrection'){
       if(ss.role!=='dealer')return res.status(403).json({error:'Down tracking is dealer-only'});await q(`UPDATE down_entries SET correction_needed=NOT correction_needed WHERE id=$1 AND room_id=$2 AND member_id=$3`,[clean(b.id,80),room.id,ss.member_id]);
