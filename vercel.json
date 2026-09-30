@@ -1,10 +1,9 @@
 {
   "functions": {
-    "api/app.js": {
-      "maxDuration": 120
-    },
-    "api/notifications-cron.js": {
-      "maxDuration": 120
-    }
-  }
+    "api/app.js": { "maxDuration": 120 },
+    "api/notifications-cron.js": { "maxDuration": 120 }
+  },
+  "crons": [
+    { "path": "/api/notifications-cron", "schedule": "* * * * *" }
+  ]
 }
