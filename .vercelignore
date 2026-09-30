@@ -7,3 +7,4 @@ scripts
 *.md
 *.txt
 deployment
+.npm-cache

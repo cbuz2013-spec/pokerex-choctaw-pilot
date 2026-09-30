@@ -1,6 +1,6 @@
 {
   "name": "pokerex-choctaw-pilot",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "dependencies": {
@@ -9,7 +9,7 @@
   },
   "scripts": {
     "generate-vapid": "node scripts/generate-vapid.js",
-    "test": "node --test tests/*.test.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.js",
     "setup-push": "node scripts/setup-push.js",
     "verify:serve": "node tests/serve-fixture.mjs"
   },

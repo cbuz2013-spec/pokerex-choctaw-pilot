@@ -1,4 +1,4 @@
-# PokerEx 1.1 — Choctaw Pilot
+# PokerEx 1.1.1 — Choctaw Pilot
 
 Poker Executives branding, room channels, private direct messages, and the fixes from the PokerEx 1.0 audit.
 
@@ -12,6 +12,10 @@ Poker Executives branding, room channels, private direct messages, and the fixes
 - Validated clocks and geofences, room-timezone daily hours, stable join-request IDs, visible refresh failures, and in-page confirmations.
 - Existing EO, scheduling, swaps, timekeeping, down-card import/report, roster imports, broadcasts and operational notifications.
 
+## QA repair release
+
+See **UPGRADE_1.1.1.md** for the QA fixes, owner PIN rotation requirement, AI billing dependency, scheduler requirements and remaining physical-device checks.
+
 ## Upgrade
 
 Use **UPGRADE_1.1.md** for the existing PokerEx installation. Run **MIGRATION_PokerEx_1.1.sql** against the same database, then deploy the package contents. Existing owners must sign in again because old owner sessions did not identify the individual owner.
@@ -20,6 +24,6 @@ Use `schema.sql` only for a fresh database. Existing credentials and notificatio
 
 ## Verification
 
-`npm test` runs 43 automated checks. `npm run verify:serve` starts a disposable local database and test server; AI and push are simulated. See **RELEASE_NOTES_1.1.md** for results and remaining device checks.
+`npm test` runs 56 automated checks. `npm run verify:serve` starts a disposable local database and test server; AI and push are simulated. See **RELEASE_NOTES_1.1.md** for results and remaining device checks.
 
 Chat supports text channels and direct messages. Attachments, voice/video, reactions, read receipts and chat-specific background push are outside this version. Existing operational and manager-broadcast notifications remain available.

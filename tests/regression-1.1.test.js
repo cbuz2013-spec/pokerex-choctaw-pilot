@@ -15,6 +15,7 @@ test('room calendar boundaries include daylight-saving changes',()=>{
 test('1.1 API regression: audit fixes and room chat',async t=>{
  const db=new PGlite();await db.exec(await fs.readFile(new URL('../schema.sql',import.meta.url),'utf8'));await db.exec('CREATE FUNCTION pg_advisory_xact_lock(bigint) RETURNS void LANGUAGE SQL AS $$ SELECT $$;');
  const query=(s,p=[])=>p.length?db.query(s,p):db.exec(s).then(r=>r.at(-1));pg.Pool=class{query(s,p=[]){return query(s,p)}async connect(){return {query,release(){}}}};
+ process.env.POKEREX_ENABLE_DEMO='true';
  process.env.DATABASE_URL='postgres://disposable-test';
  const {default:handler}=await import('../api/app.js');
  const call=async body=>{let output,status=200;const res={setHeader(){},status(n){status=n;return this},json(v){output=v;return this}};await handler({method:'POST',body:{room:'4271',...body},query:{}},res);return {status,...output}};
