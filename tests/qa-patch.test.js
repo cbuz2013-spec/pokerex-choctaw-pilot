@@ -32,7 +32,7 @@ test('browser scripts compile and production page has no published demo credenti
  for(const file of ['qa-fixes.js','csv.js','drafts.js','down-cards.js'])new vm.Script(await fs.readFile(new URL('../'+file,import.meta.url),'utf8'));
  assert.doesNotMatch(html,/Demo owner PIN|Demo: George|value="5555"/);
  assert.match(html,/qa-fixes\.js/);assert.match(html,/End is next day/);
- const config=JSON.parse(await fs.readFile(new URL('../vercel.json',import.meta.url),'utf8'));
+ const config=JSON.parse(await fs.readFile(new URL('../deployment/vercel-with-minute-cron.json',import.meta.url),'utf8'));
  assert.ok(config.crons.some(x=>x.path==='/api/notifications-cron'&&x.schedule==='* * * * *'));
 });
 

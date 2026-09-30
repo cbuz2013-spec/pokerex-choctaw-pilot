@@ -6,11 +6,5 @@
     "api/notifications-cron.js": {
       "maxDuration": 120
     }
-  },
-  "crons": [
-    {
-      "path": "/api/notifications-cron",
-      "schedule": "* * * * *"
-    }
-  ]
+  }
 }
